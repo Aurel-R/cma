@@ -78,7 +78,7 @@ if (ptr_to(&cm->s2, cm->s1))   /* GOOD */
   *flags* are used for *msync(2)* (only for shared memory and mapped file).
 
 - **int cm\_free(void)**
-  Free the contiguous memory and reset hus properties.
+  Free the contiguous memory and reset his properties.
 
 - **cm\_processing(X, O\_SIZE, D\_SIZE) MACRO** (call void cm\_processing\_r(void \*\*addr, size\_t object\_size, size\_t data\_size))
   Used on client application just after getting the buffer (addr). The memory
