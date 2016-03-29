@@ -1,4 +1,4 @@
-# First prototype (11 March 2016)
+# First prototype
 This API allocate contiguous memory (CM) to perform IPC mechanisms for share
 complex (and large) objects containing pointers (like list or binary tree for
 example).
