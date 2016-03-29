@@ -82,9 +82,9 @@ if (ptr_to(&cm->s2, cm->s1))   /* GOOD */
 
 - **cm\_processing(X, O\_SIZE, D\_SIZE) MACRO** (call void cm\_processing\_r(void \*\*addr, size\_t object\_size, size\_t data\_size))
   Used on client application just after getting the buffer (addr). The memory
-  containing the buffer have to be wrtieable (in shm and mapped file).
-  *X* is the address of buffer, *O\_SIZE* the size of the object (struct) and *D\_SIZE*
-  the data size (obtained by a *fstat()* in shm for example).
+  containing the buffer have to be writeable (in shm and mapped file).
+  *X* is the address of buffer pointer, *O\_SIZE* the size of the object (struct) 
+  and *D\_SIZE* the data size (obtained by a *fstat()* in shm for example).
 
 ###### Some useful functions:
 - shm\_open
