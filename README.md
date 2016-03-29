@@ -12,7 +12,7 @@ Arrived set have to be exactly the same for the server and the client
 (memory alignement too)
 ```
 /* srv app */
-strcut data_srv {
+strcut data_srv {  /* a stucture example */
         int x;
         char *s;
         struct data_srv *next;
