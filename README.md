@@ -2,7 +2,7 @@
 This API allocate contiguous memory (CM) to perform IPC mechanism for share
 complex (and large) objects containing pointers (like list or binary tree for
 example).
-It is based on pointers arthmetic to not use data duplication and serialization.
+It is based on pointers arithmetic to not use data duplication and serialization.
 
 # HOWTO
 *Refer to 'examples' directory (only posix shared memory for the moment)*
