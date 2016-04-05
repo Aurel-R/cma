@@ -25,7 +25,7 @@ static struct memory mem = {
 
 #define TsC(x)	(x = ((~x)+1))
 
-static int64_t reverse_VLQ(int64_t vlq)
+static int64_t reverse_vlq(int64_t vlq)
 {
 	size_t size = sizeof(int64_t);
 	int i;
@@ -41,7 +41,7 @@ static int64_t reverse_VLQ(int64_t vlq)
 }
 
 /* Read a reverse VLQ (signed and unsigned) */
-static size_t read_VLQ(int32_t *vlq, const int8_t *c) 
+static size_t read_vlq(int32_t *vlq, const int8_t *c) 
 {
 	int32_t x = 0;
 	size_t n = 0;
@@ -63,7 +63,7 @@ static size_t read_VLQ(int32_t *vlq, const int8_t *c)
  *  A negative value can be represented
  *  Return the number of bytes used for the vlq 
  */
-static size_t write_VLQ(int64_t *vlq, int32_t offset)
+static size_t write_vlq(int64_t *vlq, int32_t offset)
 {	
 	size_t n;
 	*vlq = 0;
@@ -108,7 +108,7 @@ static int cm_grow(void **addr, void *ptr, size_t len)
 
 	new_addr = malloc(sizeof(*new_addr));
 	if (!new_addr) 
-		return 1;
+		return -1;
 	
 	new_addr->ptr = ptr;
 	new_addr->addr = addr;
@@ -117,7 +117,7 @@ static int cm_grow(void **addr, void *ptr, size_t len)
 	
 	/* offset can be negative */	
 	new_addr->offset = ((void *)addr - mem.base_addr) - mem.vlq_sum;
-	mem.vlq_size += write_VLQ(&new_addr->vlq, new_addr->offset);
+	mem.vlq_size += write_vlq(&new_addr->vlq, new_addr->offset);
 	mem.vlq_sum += new_addr->offset;
 
 	if (!mem.addr_list) 
@@ -197,9 +197,8 @@ int affect_ptr(void **ptr, void *to)
 		return cm_grow(ptr, to, 0);	
 	} 
 
-	return 1;
+	return -1;
 }
-
 
 void *cm_sync(int flags)
 {
@@ -213,7 +212,7 @@ void *cm_sync(int flags)
 	while (al) {
 		size = sizeof(int64_t) - 1;
 		do {
-			al->vlq = reverse_VLQ(al->vlq);
+			al->vlq = reverse_vlq(al->vlq);
 			vlq[indice--] = al->vlq_c[size];	
 		} while (al->vlq_c[size--] & 0x80);
 		al = al->next;
@@ -234,7 +233,7 @@ void cm_processing_r(void **addr, size_t object_size, size_t data_size)
 	int8_t *vlq = *addr + (data_size - 1);
 	void *start_addr = *addr;
 
-	vlq -= read_VLQ(&offset, vlq);
+	vlq -= read_vlq(&offset, vlq);
 	old_base_addr = *((uintptr_t *)(*addr + offset)) - object_size;
 	translation_coeff = (uintptr_t)*addr - old_base_addr; 
 
@@ -246,8 +245,8 @@ void cm_processing_r(void **addr, size_t object_size, size_t data_size)
 		*((uintptr_t *)*addr) += translation_coeff;
 	}
 	
-	for (vlq -= read_VLQ(&offset, vlq); offset; 
-	     vlq -= read_VLQ(&offset, vlq)) {
+	for (vlq -= read_vlq(&offset, vlq); offset; 
+	     vlq -= read_vlq(&offset, vlq)) {
 		*addr += offset;
 		*((uintptr_t *)*addr) += translation_coeff;
 	}
