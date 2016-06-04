@@ -251,8 +251,7 @@ void cm_processing_r(void **addr, size_t object_size, size_t data_size)
 		*((uintptr_t *)*addr) += translation_coeff;
 	}
 
-	translation_coeff = *addr - start_addr;
-	*addr -= translation_coeff;
+	*addr = start_addr;
 }
 
 int cm_free(void)
