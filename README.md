@@ -34,9 +34,11 @@ struct data_cli {    /* GOOD */
 };
 ```
 
-- **void cm\_set\_properties(int fd, mode\_t mode)**
+- **void cm\_set\_properties(int fd, mode\_t mode, int flags)**
   Only shared memory and mapped file are concerning. It define the fd and mode
-  for mapping (defaults values are *MAP\_ANON | MAP\_SHARED*).
+  for mapping (defaults values are *MAP\_ANON | MAP\_SHARED*). *flags* can be set
+  to 0, or if you use a special file like /dev/zero (where file size don't change)
+  use the constant *SPECIAL_FILE*
 
 - **cma(ADDR, X) MACRO** (int cm\_allocator(void \*\*addr, size\_t size, int flag))
   Allocate contiguous memory. *ADDR* is the address pointer of object and *X* the size.
@@ -78,8 +80,8 @@ if (ptr_to(&cm->s2, cm->s1))   /* GOOD */
   *flags* are used for *msync(2)* (only for shared memory and mapped file).
 
 - **int cm\_free(int flag)**
-  Free the contiguous memory and reset his properties if *flag* is set to *DELETE_MAP*.
-  Else the size of map is returned to be unmap later by the user 
+  Free the contiguous memory and reset his properties if *flag* is set to *DELETE\_MAP*.
+  Else the size of map is returned to be unmap later by the user (*PRESERVE\_MAP*)
  
 - **cm\_processing(X, O\_SIZE, D\_SIZE) MACRO** (call void cm\_processing\_r(void \*\*addr, size\_t object\_size, size\_t data\_size))
   Used on client application just after getting the buffer (addr). The memory
