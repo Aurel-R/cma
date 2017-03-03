@@ -6,4 +6,4 @@ cli_shm: ../cma.h ../cma.c cli_shm.c
 	gcc -Wall -o cli_shm -lrt -D_GNU_SOURCE cli_shm.c ../cma.c
 
 clean:
-	rm *.o srv_shm cli_shm
+	rm srv_shm cli_shm

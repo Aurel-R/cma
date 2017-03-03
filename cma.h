@@ -1,12 +1,14 @@
 #ifndef _CMA_H
 #define _CMA_H
 
-#define GROW		0x01
-#define FIRST_FIT	0x02 /* not used yet */
+/* mutually exclusive flags */
+#define DELETE_MAP	0x00
+#define PRESERVE_MAP	0x01
 
 struct memory {
 	int fd;
 	mode_t mode;
+	int flags;
 	size_t map_size;
 	size_t vlq_size;
 	int32_t vlq_sum;
@@ -14,8 +16,7 @@ struct memory {
 	void **root;
 	struct address_list *addr_list;
 	struct address_list *last_addr;
-	struct free_block *free_blocks;
-};
+};  /* *memory_array[SIZE]; */
 
 struct address_list {
 	void *ptr;
@@ -29,27 +30,20 @@ struct address_list {
 	struct address_list *next;
 };
 
-struct free_block { /* not used yet */
-	void *addr;
-	size_t len;
-	struct free_block *next;
-};
-
 /* 
  * Allocate Contiguous Memory (CM), it is used as malloc. You should 
  * use cma() macro instead of cm_allocator().  
  */
+#define GROW		0x01
 #define cma(ADDR, X)	cm_allocator((void **)ADDR, X, GROW)
 int cm_allocator(void **addr, size_t size, int flag);
-
-int cm_realloc_block(void **addr, size_t new_size); /* not used yet */
-int cm_free_block(void *addr); /* not used yet */
 
 /* 
  * Used for posix shared memory and file mapped. 
  * Call it before the first cma()
  */
-void cm_set_properties(int fd, mode_t mode);
+#define SPECIAL_FILE	0x01
+void cm_set_properties(int fd, mode_t mode, int flags);
 
 /* affect a pointer in CM from CM */
 #define ptr_to(P, X)	affect_ptr((void **)P, X)
@@ -70,8 +64,14 @@ size_t cm_get_size(void);
  */
 size_t cm_get_pre_size(void);
 
-/* free the CM and reset his properties */
-int cm_free(void);
+/* free the CM and reset his properties 
+ * If flag is PRESERVE_MAP cm_free() return the size of map
+ * for unmap later
+ * */
+int cm_free(int flag);
+
+/* return the len of the raw data (useful to the client) */
+size_t cm_raw_data_len(void *ptr, size_t data_size);
 
 /* 
  * Used on client application just after getting the buffer (addr).
@@ -80,5 +80,6 @@ int cm_free(void);
  */
 #define cm_processing(X, O_SIZE, D_SIZE) cm_processing_r((void **)X, O_SIZE, D_SIZE)
 void cm_processing_r(void **addr, size_t object_size, size_t data_size);
+
 
 #endif

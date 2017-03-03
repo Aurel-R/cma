@@ -50,7 +50,7 @@ int main(void)
 		return 1;
 	}
 
-	cm_set_properties(fd, MAP_SHARED);
+	cm_set_properties(fd, MAP_SHARED, 0);
 
 	cm = foo();
 	if (!cm)
@@ -61,11 +61,11 @@ int main(void)
 	printf("cm->nxt->x = %d\n", cm->nxt->x);
 	printf("cm->nxt->s = %s\n", cm->nxt->s);
 
-	cm_free();
+	cm_free(DELETE_MAP);
 	close(fd);
 	return 0;
 err:
-	cm_free();
+	cm_free(DELETE_MAP);
 	shm_unlink("/example_cm");
 	close(fd);
 	perror("cma error");

@@ -1,0 +1,4 @@
+*.o
+*~
+srv_shm
+cli_shm
