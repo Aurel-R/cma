@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
-
 #include "../cma.h"
 
 struct example {
