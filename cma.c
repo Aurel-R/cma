@@ -29,7 +29,7 @@ static int64_t reverse_vlq(int64_t vlq)
 	size_t size = sizeof(int64_t);
 	int i;
 	union {
-		char t[sizeof(int64_t)];
+		int8_t t[sizeof(int64_t)];
 		int64_t v;
 	} old, new;
        
