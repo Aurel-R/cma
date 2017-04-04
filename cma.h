@@ -52,8 +52,7 @@ void *cm_sync(int flags);
 /* return the actual size of CM */
 size_t cm_get_size(void);
 
-/* Return the size of the CM should have after a cm_sync() 
- * Useful for fct like send(): send(fd, cm_sync(0), cm_get_pre_size(), 0); */
+/* Return the size of the CM should have after a cm_sync() */ 
 size_t cm_get_pre_size(void);
 
 /* free the CM and reset his properties 
