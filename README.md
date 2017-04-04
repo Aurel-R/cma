@@ -71,9 +71,8 @@ if (ptr_to(&cm->s2, cm->s1))   /* GOOD */
 ```
 
 - **size\_t cm\_get\_size(void)** and **size\_t cm\_get\_pre\_size(void)**
-  Return the actual size of the CM. *cm\_get\_pre\_size* can be useful for
-  function like send: *send(sock, cm\_sync(0), cm\_get\_pre\_size(), 0);* because
-  it return the size of the CM should have after a cm\_sync()
+  Return the actual size of the CM. *cm\_get\_pre\_size* return the size of 
+  the CM should have after a cm\_sync()
 
 - **void \*cm\_sync(int flags)**
   Synchronize the CM. Return a pointer at the start of CM or NULL on error.
