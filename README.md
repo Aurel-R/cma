@@ -1,5 +1,5 @@
 # First prototype
-This API allocate contiguous memory (CM) to perform IPC mechanisms for share
+This API allocate contiguous memory (CM) to improve IPC mechanisms for share
 complex (and large) objects containing pointers (like list, binary tree and 
 graph for example).
 It is based on pointers arithmetic to not use data duplication.
