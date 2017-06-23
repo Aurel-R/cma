@@ -37,7 +37,7 @@ struct data_cli {    /* GOOD */
 - **void cm\_set\_properties(int fd, mode\_t mode, int flags)**
   Only shared memory and mapped file are concerning. It define the fd and mode
   for mapping (defaults values are *MAP\_ANON | MAP\_SHARED*). *flags* can be set
-  to 0, or if you use a special file like /dev/zero (where file size don't change)
+  to 0, or if you use a special file like /dev/zero (where file size doesn't change)
   use the constant *SPECIAL_FILE*
 
 - **cma(ADDR, X) MACRO** (int cm\_allocator(void \*\*addr, size\_t size, int flag))
