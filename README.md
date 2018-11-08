@@ -1,5 +1,5 @@
 # Contiguous (and serialized) Memory Allocator
-These functions allocate contiguous memory (CM) to perform IPC mechanisms for share
+These functions allocate contiguous memory (cm) to facilitate the use of IPCs to share
 complex (and large) objects containing pointers (like list, binary tree and 
 graph for example).
 
@@ -11,8 +11,8 @@ graph for example).
 cma is designed for 64 bits x86 little endian processor with two's complement
 signed integers running GNU/Linux (LP64) and compiling with gcc C extension.
 
-Arrived set have to be exactly the same (memory alignement too) on the different
-running programs that want to share data. Example:
+Arrival sets must be strictly identical (memory alignement) on the different
+programs that want to share data. Example:
 ```
 /* srv app */
 strcut data_srv {  /* a stucture example */
@@ -37,7 +37,7 @@ struct data_cli {    /* GOOD */
 };
 ```
 
-You can't affect directly a pointer in CM, you have to use memcpy()
+You can't affect directly a pointer in cm, you have to use memcpy()
 ```
 char str[] = "abc";
 struct x *cm;  /* the CM */
@@ -49,7 +49,7 @@ memcpy(cm->s, str, str_size);  /* GOOD */
 /* be sure the cm->s have a len >= at str_size */
 ```
 
-In the same way, you can't affect directly a pointer in CM, from CM.
+In the same way, you can't affect directly a pointer in cm, from cm.
 For do this and to avoid duplicating data with a memcpy, you can use the
 macro cm\_ptr\_to()
 ```
