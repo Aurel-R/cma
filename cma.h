@@ -1,73 +1,54 @@
 #ifndef _CMA_H
 #define _CMA_H
 
-/* mutually exclusive flags */
-#define DELETE_MAP	0x00
-#define PRESERVE_MAP	0x01
-
-struct memory {
+struct cm_attr {
 	int fd;
-	mode_t mode;
+	int mode;
 	int flags;
+	size_t length;
+	void *base_addr;
+	void **root;
 	size_t map_size;
 	size_t vlq_size;
 	int32_t vlq_sum;
-	void *base_addr;
-	void **root;
-	struct address_list *addr_list;
-	struct address_list *last_addr;
-};  /* *memory_array[SIZE]; */
+	struct cm_addr_list *addr_list;
+	struct cm_addr_list *last_addr;
+};
 
-struct address_list {
+struct cm_addr_list {
 	void *ptr;
 	void **addr;
-	size_t len;
 	int32_t offset;
+	size_t len;
 	union { 
 		int8_t vlq_c[sizeof(int64_t)];
 		int64_t vlq;
 	};
-	struct address_list *next;
+	struct cm_addr_list *next;
 };
 
-/* Allocate Contiguous Memory (CM), it is used as malloc. You should 
- * use cma() macro instead of cm_allocator(). */
-#define GROW		0x01
-#define cma(ADDR, X)	cm_allocator((void **)ADDR, X, GROW)
-int cm_allocator(void **addr, size_t size, int flag);
+#define UNTRUNCABLE_FILE	0x01
+struct cm_attr *cm_create(int fd, size_t length, int mode, int flags);
+#define CM_EREASE	0x00
+#define CM_PRESERVE	0x01
+ssize_t cm_delete(struct cm_attr *mem, int flag);
 
-/* Used for posix shared memory and file mapped. 
- * Call it before the first cma() */
-#define SPECIAL_FILE	0x01
-void cm_set_properties(int fd, mode_t mode, int flags);
+int cm_try_extend(struct cm_attr *mem, size_t size);
+int cm_force_extend(struct cm_attr *mem, size_t size);
 
-/* affect a pointer in CM from CM */
-#define ptr_to(P, X)	affect_ptr((void **)P, X)
-int affect_ptr(void **ptr, void *to);
+ssize_t cm_get_size(struct cm_attr *mem);
+ssize_t cm_get_pre_size(struct cm_attr *mem);
+ssize_t cm_get_free_size(struct cm_attr *mem);
 
-/* Synchronize the CM. Return a ptr at the start of CM or NULL on error. 
- * Flags are used for msync() (only for posix shm and mapped file) */
-void *cm_sync(int flags); 
+#define CM_GROW	0x01 
+#define cm_alloc(CM, ADDR, SIZE) cm_do_alloc(CM, (void **)ADDR, SIZE, CM_GROW)
+int cm_do_alloc(struct cm_attr *mem, void **addr, size_t size, int flag);
+#define cm_ptr_to(CM, PTR, TO) cm_affect_ptr(CM, (void **)PTR, TO) 
+int cm_affect_ptr(struct cm_attr *mem, void **ptr, void *to);
 
-/* return the actual size of CM */
-size_t cm_get_size(void);
-
-/* Return the size of the CM should have after a cm_sync() */ 
-size_t cm_get_pre_size(void);
-
-/* free the CM and reset his properties 
- * If flag is PRESERVE_MAP cm_free() return the size of map
- * for unmap later */
-int cm_free(int flag);
-
-/* return the len of the raw data (useful to the client) */
-size_t cm_raw_data_len(void *ptr, size_t data_size);
-
-/* Used on client application just after getting the buffer (addr).
- * The memory containing the buffer have to be writeable (in shm and 
- * mapped file) */
-#define cm_processing(X, O_SIZE, D_SIZE) cm_processing_r((void **)X, O_SIZE, D_SIZE)
-void cm_processing_r(void **addr, size_t object_size, size_t data_size);
-
+void *cm_serialize(struct cm_attr *mem, int flags);
+#define cm_deserialize(ADDR, O_SIZE, D_SIZE) \
+		cm_do_deserialize((void **)ADDR, O_SIZE, D_SIZE)
+int cm_do_deserialize(void **addr, size_t object_size, size_t data_size);
 
 #endif

@@ -1,9 +1,13 @@
-all: srv_shm cli_shm
+CC=gcc
+CFLAGS=-std=gnu11 -O3 -fno-strict-aliasing -fno-strict-overflow -Wall -Wextra
+LDFLAGS=-lrt -D_GNU_SOURCE
+ALL=srv_shm cli_shm
 
-srv_shm: ../cma.h ../cma.c srv_shm.c
-	gcc -Wall -o srv_shm -lrt -D_GNU_SOURCE srv_shm.c ../cma.c 
-cli_shm: ../cma.h ../cma.c cli_shm.c
-	gcc -Wall -o cli_shm -lrt -D_GNU_SOURCE cli_shm.c ../cma.c
+all: $(ALL) 
 
+srv_shm: srv_shm.c ../cma.c
+	$(CC) $(CFLAGS) -o $@ $(LDFLAGS) $^
+cli_shm: cli_shm.c ../cma.c
+	$(CC) $(CFLAGS) -o $@ $(LDFLAGS) $^
 clean:
-	rm srv_shm cli_shm
+	rm $(ALL)

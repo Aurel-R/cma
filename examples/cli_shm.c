@@ -11,8 +11,8 @@
 #include "../cma.h"
 
 struct example {
-	char *s;
 	int x;
+	char *s;
 	struct example *nxt;
 };
 
@@ -20,7 +20,7 @@ int main(void)
 {
 	int fd;
 	struct stat st;
-	struct example *cm;
+	struct example *cm; 
 
 	fd = shm_open("/example_cm", O_RDWR, S_IRUSR);
 	if (fd == -1) {
@@ -40,7 +40,11 @@ int main(void)
 		goto err;
 	}
 	
-	cm_processing(&cm, sizeof(*cm), st.st_size);
+	if (cm_deserialize(&cm, sizeof(*cm), st.st_size)) {
+		perror("cm_deserialize");
+		munmap(cm, st.st_size);
+		goto err;
+	}
 
 	printf("cm->x = %d\n", cm->x);
 	printf("cm->s = %s\n", cm->s);
@@ -51,7 +55,6 @@ int main(void)
 	close(fd);
 	shm_unlink("/example_cm");
 	return 0;
-
 err:
 	close(fd);
 	shm_unlink("/example_cm");
