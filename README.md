@@ -12,7 +12,7 @@ cma is designed for 64 bits x86 little endian processor with two's complement
 signed integers running GNU/Linux (LP64) and compiling with gcc C extension.
 
 Arrival sets must be strictly identical (memory alignement) on the different
-programs that want to share data. Example:
+process that want to share data. Example:
 ```
 /* srv app */
 struct data_srv {  /* a stucture example */
