@@ -34,6 +34,8 @@ int main(void)
 		goto err;
 	}	
 
+	/* usually (and depending on your use case), it may be necessary to use
+	 * a private mapping (MAP_PRIVATE) */
 	cm = mmap(NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (cm == MAP_FAILED) {
 		perror("mmap err");
