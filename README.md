@@ -1,7 +1,7 @@
 # Contiguous (and serialized) Memory Allocator
 These functions allocate contiguous memory (cm) to facilitate the use of IPCs to share
-complex (and large) objects containing pointers (like list, binary tree and 
-graph for example).
+complex (and large) objects containing pointers (list, binary tree, 
+graph, etc).
 
 # HOWTO
 *Refer to 'examples' directory (only posix shared memory use case for the moment).*
@@ -15,7 +15,7 @@ Arrival sets must be strictly identical (memory alignement) on the different
 programs that want to share data. Example:
 ```
 /* srv app */
-strcut data_srv {  /* a stucture example */
+struct data_srv {  /* a stucture example */
         int x;
         char *s;
         struct data_srv *next;
