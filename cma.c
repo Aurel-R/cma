@@ -96,7 +96,7 @@ static inline int oor_vlq(const int32_t offset, const int32_t vlq_sum)
  * In case:
  *     To the same object(+1) or to members of the same object 
  *     (array, struct, union) the behavior is defined. It should
- *     be noted that (pointer) arithmetic on uintptr_t is undocumented
+ *     be noted that (pointer) arithmetic on uintptr_t is unspecified
  *     (probably implementation defined). It conerns cm_grow() function.
  * else (recalculate_addr() and cm_do_deserialize())
  *     C11: undefined behaviour (probably implementation defined, 
