@@ -1,4 +1,4 @@
-# Contiguous (and serialized) Memory Allocator
+# Contiguous (and serialized) Memory Allocation
 These functions allocate contiguous memory (cm) to facilitate the use of IPCs to share
 complex (and large) objects containing pointers (list, binary tree, 
 graph, etc).
