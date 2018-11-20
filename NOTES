@@ -7,7 +7,7 @@ XXX: More clarification are needed for (1) and (2).
 -------------------------------
 
  Behavior depends on the pointers provenance. In all cases, 
- pointer to integer casts (and vice verca) depends on the 
+ pointer to integer casts (and vice-versa) depends on the 
  implementation (implementation defined). Pointers should 
  always be converted to uintptr_t or to unsigned long for
  LP64 system.
