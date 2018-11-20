@@ -20,7 +20,7 @@
 #endif
 /* It can't normally happen, unless (u)intptr_t is not defined (optional types). 
  * In case, redefined (u)intptr_t from (unsigned) long (LP64 system) and use
- * (U)LONG_MAX from limits.h ? */ 
+ * (U)LONG_MAX from limits.h */ 
 #if INTPTR_MAX != INT64_MAX || UINTPTR_MAX != UINT64_MAX
 #error "incompatible types (u)intptr_t (u)int64_t."
 #endif
@@ -88,20 +88,12 @@ static inline int oor_vlq(const int32_t offset, const int32_t vlq_sum)
 	return !(sub >= offset);
 }
 
-/* XXX: More clarification are needed
- * Behavior depends on the pointers provenance. In all cases, 
- * pointer to integer casts (and vice verca) depends on the 
- * implementation (implementation defined for (u)intptr_t types).
- * Implementation to/from unsigned long for LP64 has the same behavior ?
- * In case:
- *     To the same object(+1) or to members of the same object 
- *     (array, struct, union) the behavior is defined. It should
- *     be noted that (pointer) arithmetic on uintptr_t is unspecified
- *     (probably implementation defined). It conerns cm_grow() function.
- * else (recalculate_addr() and cm_do_deserialize())
- *     C11: undefined behaviour (probably implementation defined, 
- *	    does not clearly specify)
- *     C2X: yes with no-provenance option proposal
+/* 
+ * Behavior depends on the pointers provenance.
+ * 
+ * XXX: SEE NOTES
+ *	(1) 'About subptr_64() function'  
+ *	(2) 'About uintptr_t arithmetic' 
  */
 static inline int64_t subptr_64(const void *const ptr1, 
 					const void *const ptr2, int *overflow)
