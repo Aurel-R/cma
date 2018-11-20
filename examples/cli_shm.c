@@ -28,7 +28,6 @@ int main(void)
 		return 1;
 	}
 
-
 	if (fstat(fd, &st) == -1) {
 		perror("fstat error");
 		goto err;
