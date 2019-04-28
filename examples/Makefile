@@ -1,13 +1,16 @@
 CC=gcc
-CFLAGS=-std=gnu11 -O3 -fno-strict-aliasing -fno-strict-overflow -Wall -Wextra
-LDFLAGS=-lrt -D_GNU_SOURCE
-ALL=srv_shm cli_shm
+CFLAGS=-std=gnu11 -D_GNU_SOURCE -O3 -march=native -Wall -Wextra
+LDFLAGS=-lrt
+ALL=list_serialize list_deserialize
+
+#export OMP_NUM_THREADS=4
 
 all: $(ALL) 
 
-srv_shm: srv_shm.c ../cma.c
-	$(CC) $(CFLAGS) -o $@ $(LDFLAGS) $^
-cli_shm: cli_shm.c ../cma.c
-	$(CC) $(CFLAGS) -o $@ $(LDFLAGS) $^
+list_serialize: list_serialize.c ../cma.c
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) 
+list_deserialize: list_deserialize.c ../cma.c
+	$(CC) $(CFLAGS) -fopenmp -o $@ $^ $(LDFLAGS) 
+
 clean:
 	rm $(ALL)

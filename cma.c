@@ -1,14 +1,10 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <stddef.h>
 #include "cma.h"
 
 /* Technically, big-endian could be supported if reverse_vlq() is not called */ 
@@ -35,28 +31,34 @@
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
-static inline int64_t reverse_vlq(int64_t vlq)
+#define ALIGN(x, align)	(((x) + (align) - 1) & ~((align) - 1))
+
+#define CM_OBA_OFFSET(X, S)	(X + S - sizeof(void *))
+#define CM_NPTR_OFFSET(X, S)	(CM_OBA_OFFSET(X, S)  - sizeof(size_t))
+#define CM_VLQ_OFFSET(X, S)	(CM_NPTR_OFFSET(X, S) - 1)
+
+static inline int64_t reverse_vlq(const int64_t vlq)
 {
-	return  ((vlq << 56) & 0xff00000000000000UL) |
-		((vlq << 40) & 0x00ff000000000000UL) |
-		((vlq << 24) & 0x0000ff0000000000UL) |
-		((vlq <<  8) & 0x000000ff00000000UL) |
-		((vlq >>  8) & 0x00000000ff000000UL) |
-		((vlq >> 24) & 0x0000000000ff0000UL) |
-		((vlq >> 40) & 0x000000000000ff00UL) |
-	       	((vlq >> 56) & 0x00000000000000ffUL);
+	return  ((vlq << 56) & 0xff00000000000000ul) |
+		((vlq << 40) & 0x00ff000000000000ul) |
+		((vlq << 24) & 0x0000ff0000000000ul) |
+		((vlq <<  8) & 0x000000ff00000000ul) |
+		((vlq >>  8) & 0x00000000ff000000ul) |
+		((vlq >> 24) & 0x0000000000ff0000ul) |
+		((vlq >> 40) & 0x000000000000ff00ul) |
+	       	((vlq >> 56) & 0x00000000000000fful);
 }
 
-static inline size_t read_vlq(int32_t *restrict offset, 
-					const int8_t *restrict vlq) 
+static inline size_t read_vlq(int32_t *restrict offset,
+					const int8_t *restrict vlq)
 {
 	size_t n;
-	int32_t x = (int32_t)(*vlq & 0x3f);
+	*offset = (int32_t)(*vlq & 0x3f);
+
+	for (n = 1; (*vlq-- & 0x80) && n < 6; n++)
+		*offset = (*offset << 6) | (int32_t)(*vlq & 0x3f);
 	
-	for (n = 1; *vlq-- & 0x80; n++) 
-		x = (x << 6) | (int32_t)(*vlq & 0x3f);
-	
-	*offset = (*(vlq + 1) & 0x40) ? ~x + 1 : x;
+	*offset = (*(vlq + 1) & 0x40) ? ~(*offset) + 1 : *offset;
 	return n;
 }
 
@@ -64,7 +66,7 @@ static size_t write_vlq(int64_t *vlq, int32_t offset)
 {	
 	size_t n;
 	*vlq = 0;
-
+	
 	if (offset < 0) {
 		offset = ~offset + 1;
 		*vlq |= 0x40;
@@ -81,77 +83,95 @@ static size_t write_vlq(int64_t *vlq, int32_t offset)
 static inline int oor_vlq(const int32_t offset, const int32_t vlq_sum)
 {
 	const int32_t sub = offset - vlq_sum;
-	
-	if (vlq_sum >= 0)
-		return !(sub <= offset && sub != INT32_MIN);
-	
-	return !(sub >= offset);
+
+	return vlq_sum  >= 0
+		? !(sub <= offset && sub != INT32_MIN)
+		: !(sub >= offset);
 }
 
-/* 
- * Behavior depends on the pointers provenance.
- * 
- * XXX: SEE NOTES
- *	(1) 'About subptr_64() function'  
- *	(2) 'About uintptr_t arithmetic' 
- */
-static inline int64_t subptr_64(const void *const ptr1, 
-					const void *const ptr2, int *overflow)
+static inline int64_t subptr_64(const uintptr_t p, const uintptr_t q, int *oor) 
 {
-	const uintptr_t _ptr1 = (uintptr_t)ptr1;
-	const uintptr_t _ptr2 = (uintptr_t)ptr2;
-	uint64_t diff = MAX(_ptr1, _ptr2) - MIN(_ptr1, _ptr2);
+	const uint64_t diff = MAX(p, q) - MIN(p, q);
 
-	if (diff <= (uint64_t)INT64_MAX) 
-		return (_ptr1 < _ptr2) ? (int64_t)(~diff + 1) : (int64_t)diff;
+	if (diff <= (uint64_t)INT64_MAX) {
+		*oor = 0;
+		return (p < q) ? ~diff + 1 : diff;
+	}
 
-	*overflow = 1;
+	*oor = 1;
 	return -1;
 }
 
-static inline int32_t subptr_32(const void *const ptr1, 
-					const void *const ptr2, int *overflow) 
+static inline int32_t subptr_32(const uintptr_t p, const uintptr_t q, int *oor) 
 {
-	int64_t diff_64 = subptr_64(ptr1, ptr2, overflow);
+	const int64_t diff_64 = subptr_64(p, q, oor);
 	
-	if (!*overflow && diff_64 <= INT32_MAX && diff_64 >= INT32_MIN)
-		return (int32_t)diff_64;
+	if (!*oor && diff_64 <= INT32_MAX && diff_64 >= INT32_MIN)
+		return diff_64;
 	
-	*overflow = 1;
+	*oor = 1;
 	return -1;	
 }
 
-static inline int32_t get_ptrdiff(const void *const ptr1, 
-					const void *const ptr2, int *overflow)
+static inline int32_t get_ptrdiff(const void *const p, 
+					const void *const q, int *oor)
 {
-	*overflow = 0;
-	return subptr_32(ptr1, ptr2, overflow);	
+	return subptr_32((uintptr_t)p, (uintptr_t)q, oor);
+}
+
+/* TODO: grow by chunk (PAGE_SIZE) */
+static inline int trunc_file(int fd, size_t size, int flags)
+{
+	return (fd == -1 || flags & UNTRUNCABLE_FILE) 
+		? 0 
+		: ftruncate(fd, size);
 }
 
 struct cm_attr *cm_create(int fd, size_t length, int mode, int flags)
 {
 	void *addr;
 	struct cm_attr *mem;
-	
+	const  size_t addr_align = sizeof(void *);
+	const ssize_t page_align = (ssize_t)sysconf(_SC_PAGESIZE);
+
+	if (unlikely(page_align < 0)) 
+		return NULL;
+
+	length = ALIGN(length, (size_t)page_align);
 	addr = mmap(NULL, length, PROT_READ | PROT_WRITE, mode, fd, 0);
 	if (unlikely(addr == MAP_FAILED))
 		return NULL;
+
+	if (unlikely(trunc_file(fd, sizeof(void *), flags))) {
+		munmap(addr, length);
+		return NULL;
+	}
 
 	mem = malloc(sizeof(*mem));
 	if (unlikely(!mem)) {
 		munmap(addr, length);
 		return NULL;
 	}
-
+	
+	/* TODO: 
+	 *	- use mmap + call before 1st mmap() 
+	 *	- addr_map size can be divided by two if length < 4GB */
+	mem->addr_map = calloc(length / addr_align, sizeof(void *));
+	if (unlikely(!mem->addr_map)) {
+		munmap(addr, length);
+		free(mem);
+		return NULL;
+	}
+	
 	mem->fd = fd;
-	mem->mode = mode;
 	mem->flags = flags;
+	mem->pagesize = (size_t)page_align;
 	mem->length = length;
 	mem->base_addr = addr;
-	mem->root = NULL;
-	mem->map_size = 0;
+	mem->map_size = sizeof(void *);
 	mem->vlq_size = 0;
 	mem->vlq_sum = 0;
+	mem->nb_of_ptr = 0;
 	mem->addr_list = NULL;
 	mem->last_addr = NULL;
 	return mem;
@@ -176,72 +196,86 @@ ssize_t cm_delete(struct cm_attr *mem, int flag)
 		free(al), al = NULL;
 	}
 
+	free(mem->addr_map);
 	free(mem);
 	return retval;
 }
 
+/* XXX: deprecated */
 static int recalculate_addr(struct cm_attr *mem, 
-				void *restrict const old_addr, 
-				void *restrict const new_addr)
+				void *const old_addr, 
+				void *const new_addr)
 {
+	int oor;
+	uintptr_t ptr;
 	struct cm_addr_list *al;	
 	int64_t translation_coeff;
-	int overflow = 0;
+	const uintptr_t _old_addr = (uintptr_t)old_addr;
+	const uintptr_t _new_addr = (uintptr_t)new_addr;
 
 	mem->base_addr = new_addr;
-	translation_coeff = subptr_64(new_addr, old_addr, &overflow);
-	if (overflow) {
+	translation_coeff = subptr_64(_new_addr, _old_addr, &oor);
+	if (oor) {
 		errno = ERANGE;
 		return -1;
 	}
 
-	/* XXX: Is it better to do
-	 *	*mem->root = new_addr + (*mem->root - old_addr);  
-	 * instead of calculation of translation coefficient ?
-	 * ex see: 
-	 * issues.apache.org/jira/secure/attachment/12488206/0_7_0_ptrdiff.patch
-	 * Probably not due to compiler optimization (possibly same end code).
-	 */
-	if (mem->root)
-		*mem->root += translation_coeff;
-
 	for (al = mem->addr_list; al; al = al->next) {
-		if (al->ptr)
-			al->ptr += translation_coeff; 
 		al->addr += translation_coeff;
-		*al->addr = al->ptr;
+		ptr = (uintptr_t)*al->addr;
+		ptr += ptr ? translation_coeff : 0;
+		*al->addr = (void *)ptr;
 	}
 
 	return 0;	
 }
 
+/* XXX: deprecated */
 static int cm_extend(struct cm_attr *mem, size_t size, int flags)
 {
+	void *tmp;
 	void *new_addr;
-	void *old_addr;
-       
+	void *old_addr; /* XXX: it seem better to use uintptr_t */
+	size_t new_len;
+
 	if (!mem) {
 		errno = EFAULT;
 		return -1;
 	}	
 
+	new_len = mem->length + size;
+	new_len = ALIGN(new_len, mem->pagesize);
 	old_addr = mem->base_addr;
-	new_addr = mremap(old_addr, mem->length, mem->length + size, flags);
+	new_addr = mremap(old_addr, mem->length, new_len, flags);
 	if (new_addr == MAP_FAILED)
 		return -1;
-	
+
+	tmp = realloc(mem->addr_map, new_len);
+	if (unlikely(!tmp)) {
+		old_addr = new_addr;
+		new_addr = mremap(old_addr, new_len, mem->length, 0);
+		return -1;
+	}
+	mem->addr_map = tmp;
+	memset(mem->addr_map + mem->length, 0, new_len - mem->length); 
+
+	/* XXX: old_addr is undeterminate (value and representation) 
+	 *	comparison could be undefined behavior (even if mremap
+	 *	does not move the mapping) */
 	if (new_addr != old_addr && recalculate_addr(mem, old_addr, new_addr))
 		return -1;
 
-	mem->length += size;
+	mem->length = new_len;
 	return 0;
 }
 
+/* XXX: deprecated */
 int cm_try_extend(struct cm_attr *mem, size_t size)
 {
 	return cm_extend(mem, size, 0);
 }
 
+/* XXX: deprecated */
 int cm_force_extend(struct cm_attr *mem, size_t size)
 {
 	return cm_extend(mem, size, MREMAP_MAYMOVE);
@@ -252,89 +286,85 @@ ssize_t cm_get_size(struct cm_attr *mem)
 	return (mem) ? (ssize_t)mem->map_size : -1;
 }
 
-ssize_t cm_get_pre_size(struct cm_attr *mem)
-{
-	return (mem) ? (ssize_t)(mem->map_size + mem->vlq_size) : -1;
-}
-
 ssize_t cm_get_free_size(struct cm_attr *mem)
 {
 	return (mem) ? (ssize_t)(mem->length - 
 				(mem->map_size + mem->vlq_size)) : -1;
 }
 
-/* 
- * TODO: add test for 
- * - vlq_size (can wrap)
- * - vlq_sum (can overflow/underflow)
- */
-static int cm_grow(struct cm_attr *mem, void **addr, void *ptr, size_t len)
+/* TODO: add test for vlq_sum (can overflow/underflow) */
+static int cm_grow(struct cm_attr *mem, void **addr)
 {	
-	int overflow;
+	int oor;
+	int32_t offset;
 	struct cm_addr_list *new_addr;
+	size_t align = sizeof(void *);
 
 	new_addr = malloc(sizeof(*new_addr));
 	if (unlikely(!new_addr)) 
 		return -1;
 
-	/* XXX: ptr can be null */	
-	new_addr->ptr = ptr; 
 	new_addr->addr = addr;
-	new_addr->len = len;
 	new_addr->next = NULL;
-	new_addr->offset = get_ptrdiff(addr, mem->base_addr, &overflow);
+	offset = get_ptrdiff(addr, mem->base_addr, &oor);
 	
-	if (overflow || oor_vlq(new_addr->offset, mem->vlq_sum)) {
+	if (oor || oor_vlq(offset, mem->vlq_sum)) {
 		free(new_addr);
 		errno = ERANGE;
 		return -1;
 	}
 
-	new_addr->offset -= mem->vlq_sum;
-	mem->vlq_size += write_vlq(&new_addr->vlq, new_addr->offset); 
-	mem->vlq_sum += new_addr->offset; 
+	offset -= mem->vlq_sum;
+	mem->vlq_size += write_vlq(&new_addr->vlq, offset); 
+	mem->vlq_sum += offset; 
 
 	if (!mem->addr_list) 
 		mem->addr_list = new_addr;
 	else
 		mem->last_addr->next = new_addr;
 
-	mem->last_addr = new_addr;	
+	mem->last_addr = new_addr;
+	mem->addr_map[((void *)addr - mem->base_addr) / align] = addr;
+	mem->nb_of_ptr++;
 	return 0;
 }
 
-static inline int trunc_file(int fd, size_t size, int flag)
+static inline int in_range(struct cm_attr *mem, void **addr)
 {
-	if (!(flag & UNTRUNCABLE_FILE) && fd != -1)
-		return ftruncate(fd, size);
-
-	return 0;
+	return ((uintptr_t)addr >= (uintptr_t)mem->base_addr &&
+		(uintptr_t)addr < (uintptr_t)(mem->base_addr + mem->length));
 }
 
-int cm_do_alloc(struct cm_attr *mem, void **addr, size_t size, int flag)
+int cm_do_alloc(struct cm_attr *mem, void **addr, size_t size, int flags)
 {
-	int serrno;
 	void *ptr;
+	int serrno;
+	size_t offset;
+	const size_t align = flags & CM_ALIGNED ? sizeof(void *) : 0;
 		
 	if (!mem || !addr) {
 		errno = EFAULT;
 		return -1;	
 	}
 
-	if ((size_t)cm_get_free_size(mem) <= size) {
+	if ((size_t)cm_get_free_size(mem) - align <= size) {
 		errno = ENOMEM;
 		return -1;
 	}
 
-	if (trunc_file(mem->fd, mem->map_size + size, mem->flags))
+	ptr = mem->base_addr + mem->map_size;
+	if (flags & CM_ALIGNED) {
+		ptr = (void *)ALIGN((uintptr_t)ptr, align);
+		offset = ptr - (mem->base_addr + mem->map_size);
+		size += offset;
+	}
+
+	if (unlikely(trunc_file(mem->fd, mem->map_size + size, mem->flags)))
 		return -1;
 
-	ptr = mem->base_addr + mem->map_size;
-	if (mem->root && flag && cm_grow(mem, addr, ptr, size))
-		goto err;
-
-	if (!mem->root)
-		mem->root = addr;
+	if ((flags & CM_GROW) && in_range(mem, addr))
+		if (unlikely(cm_grow(mem, addr)))
+			goto err;
 
 	*addr = ptr;
 	mem->map_size += size;
@@ -346,52 +376,53 @@ err:
 	return -1;	
 }
 
-int cm_affect_ptr(struct cm_attr *mem, void **ptr, void *to)
+int cm_do_ptr_to(struct cm_attr *mem, void **ptr, void *to)
 {
-	struct cm_addr_list *al;
+	void *addr;
+	const size_t align = sizeof(void *);
 
-	if (!mem || !ptr) {   
+	if (!mem || !ptr) { 
 		errno = EFAULT;
+		return -1;
+	}
+	
+	if (!in_range(mem, ptr)) {
+		errno = EINVAL;
 		return -1;
 	}
 
 	*ptr = to;
-	for (al = mem->addr_list; al; al = al->next) {
-		if (al->addr == ptr) {
-			al->ptr = to;
-			return 0;
-		}
-	}
-
-	return cm_grow(mem, ptr, to, 0);	
+	addr = mem->addr_map[((void *)ptr - mem->base_addr) / align];
+	return (addr || !to) ? 0 : cm_grow(mem, ptr);
 }
 
-void *cm_serialize(struct cm_attr *mem, int flags)
+static void *cm_relative_serialize(struct cm_attr *mem, void *root, int flags)
 {
 	int8_t *vlq;
+	size_t *nptr;
+	void *base_addr;
 	size_t size, index;
 	struct cm_addr_list *al;
 
-	if (!mem) {
-		errno = EFAULT;
-		return NULL;
-	}
-
 	index = mem->vlq_size;
-	if (cm_do_alloc(mem, (void **)&vlq, index + 1, 0))
+	if (cm_do_alloc(mem, (void **)&vlq, index + 1, 0) 	||
+	    cm_do_alloc(mem, (void **)&nptr, sizeof(size_t), 0) ||
+	    cm_do_alloc(mem, &base_addr, sizeof(void *), 0))
 		return NULL;
-
+	
 	for (al = mem->addr_list; al; al = al->next) {
 		size = sizeof(int64_t) - 1;
-		do {
-			/* XXX: multiple reverse on vlq value if
-			 * serialize is called twice */
-			al->vlq = reverse_vlq(al->vlq);
+		al->vlq = reverse_vlq(al->vlq);
+		vlq[index--] = al->vlq_c[size];
+		while (al->vlq_c[size--] & 0x80) 
 			vlq[index--] = al->vlq_c[size];
-		} while (al->vlq_c[size--] & 0x80);
-	}
-
+		al->vlq = reverse_vlq(al->vlq);
+	}	
 	vlq[index] = 0;
+	
+	*nptr = 0;
+	*(uintptr_t *)base_addr = (uintptr_t)mem->base_addr;
+	*(uintptr_t *)mem->base_addr = (uintptr_t)root;
 	if (flags && mem->fd != -1 && !(mem->flags & UNTRUNCABLE_FILE) &&
 	    msync(mem->base_addr, mem->map_size, flags) == -1)
 		return NULL;
@@ -399,37 +430,116 @@ void *cm_serialize(struct cm_attr *mem, int flags)
 	return mem->base_addr;
 }
 
-int cm_do_deserialize(void **addr, size_t object_size, size_t data_size)
+static void *cm_absolute_serialize(struct cm_attr *mem, void *root, int flags)
 {
-	int32_t offset;
-	uintptr_t old_base_addr;
-	int64_t translation_coeff;
-	int8_t *vlq = *addr + (data_size - 1);
-	void *start_addr = *addr;
-	int overflow = 0;
+	size_t i, j;	
+	size_t *nptr;
+	void *base_addr;
+	size_t *offset_table; /* XXX: if limited to 2GB, use int32_t */
+	size_t n = mem->nb_of_ptr;
+	void  *p = mem->base_addr;
+	void **q = mem->addr_map;
+	size_t m = mem->length / sizeof(void *);
 
-	vlq -= read_vlq(&offset, vlq);
-	old_base_addr = *((uintptr_t *)(*addr + offset)) - object_size;
-	translation_coeff = subptr_64(*addr, (void *)old_base_addr, &overflow);
-	if (overflow) {
+	if (n & ~(-1 >> 3)) {
 		errno = ERANGE;
-		return -1;
-	}	
-
-	if (!translation_coeff)
-		return 0;
-	
-	*addr += offset;
-	*((uintptr_t *)*addr) +=  (void *)*((uintptr_t *)*addr) ? 
-							translation_coeff : 0;
-	for (vlq -= read_vlq(&offset, vlq); offset; 
-	     vlq -= read_vlq(&offset, vlq)) {
-		*addr += offset;
-		*((uintptr_t *)*addr) +=  (void *)*((uintptr_t *)*addr) ? 
-							translation_coeff : 0;
+		return NULL;
 	}
 
-	*addr = start_addr;
-	return 0;
+	if (cm_do_alloc(mem, (void **)&offset_table, n << 3, CM_ALIGNED) ||
+	    cm_do_alloc(mem, (void **)&nptr, sizeof(size_t), 0)		 ||
+	    cm_do_alloc(mem, &base_addr, sizeof(void *), 0))
+		return NULL;
+
+	for (i = 0, j = 0; i < m && j < n; i++) {
+		offset_table[j] = q[i] - p;
+		j = q[i] ? j + 1 : j; 
+	}
+
+	*nptr = n;
+	*(uintptr_t *)base_addr = (uintptr_t)mem->base_addr;
+	*(uintptr_t *)mem->base_addr = (uintptr_t)root;
+	if (flags && mem->fd != -1 && !(mem->flags & UNTRUNCABLE_FILE) &&
+	    msync(mem->base_addr, mem->map_size, flags) == -1)
+		return NULL;
+
+	return mem->base_addr;
+}
+
+/* 
+ * TODO: do not serialize null pointers:
+ *	- remove ternary test in deserialize
+ *	- smaller memory footprint 
+ */
+void *cm_serialize(struct cm_attr *mem, void *root,
+				int serialize_flags, int msync_flags)
+{
+	if (!mem || !root) {
+		errno = EFAULT;
+		return NULL;
+	}
+	
+	if (!in_range(mem, root))
+		goto end;
+	
+	if (serialize_flags & CM_RELATIVE_OFFSET)
+		return cm_relative_serialize(mem, root, msync_flags);
+	if (serialize_flags & CM_ABSOLUTE_OFFSET)
+		return cm_absolute_serialize(mem, root, msync_flags);
+end:
+	errno = EINVAL;
+	return NULL;
+}
+
+static void cm_abs_deserialize(void *addr, const size_t *const nptr, 
+						const int64_t translation_coeff)
+{
+	size_t i;
+	const size_t *const offset_table = nptr - *nptr;
+
+	#pragma omp parallel for schedule(static)
+	for (i = 0; i < *nptr; i++) {
+		*(uintptr_t *)(addr + offset_table[i]) += 
+			*(uintptr_t *)(addr + offset_table[i])
+					? translation_coeff : 0;
+	}
+}
+
+static void cm_rel_deserialize(void *addr, int8_t *vlq, 
+						const int64_t translation_coeff)
+{
+	int32_t offset;
+
+	for (vlq -= read_vlq(&offset, vlq); offset; 
+	     vlq -= read_vlq(&offset, vlq)) {
+		addr += offset;
+		*(uintptr_t *)addr += *(uintptr_t *)addr ? translation_coeff : 0;
+	}
+}
+
+void *cm_deserialize(void *addr, const size_t len)
+{
+	int oor;
+	int64_t translation_coeff;
+	int8_t *vlq = CM_VLQ_OFFSET(addr, len);
+	const size_t *const nptr = CM_NPTR_OFFSET(addr, len);
+	const uintptr_t old_base_addr = *(uintptr_t *)CM_OBA_OFFSET(addr, len);
+	translation_coeff = subptr_64((uintptr_t)addr, old_base_addr, &oor);	
+
+	if (oor) {
+		errno = ERANGE;
+		return NULL;
+	}
+
+	if (!translation_coeff) 
+		return (void *)*(uintptr_t *)addr;
+
+	if (*nptr)
+		cm_abs_deserialize(addr, nptr, translation_coeff);
+	else
+		cm_rel_deserialize(addr, vlq,  translation_coeff);	
+
+	*(uintptr_t *)addr += translation_coeff;	
+	return (void *)*(uintptr_t *)addr;
 }
 
