@@ -5,7 +5,7 @@ These functions allocate contiguous memory (cm) in order to share complex (and l
 *Refer to 'examples' directory (only posix shared memory use case for the moment).*
 *man pages will arrive soon.*
 
-## Some specification and overview: 
+## Some specification and overview
 cma is designed for 64 bits x86 little endian processor with two's complement signed integers, running LP64 GNU/Linux system (8-byte aligned pointer) with flat address space and compiling with gcc C extension (-std=gnu11).
 
 Arrival sets must be strictly identical (memory alignment) on the different processes that want to share data. Example:
@@ -56,7 +56,7 @@ if (cm_ptr_to(mem, &cm->s2, cm->s1))   /* GOOD */
          /* error ... */
 ```
 
-## Possible improvement:
+## Possible improvement
 
 - The current implementation only supports a maximum of 2GB for both serialization modes. `CM_ABSOLUTE_OFFSET` can technically support an allocation size of serval terabytes with little code modification (do not calculate a vlq relative offset in `cm_grow()`)
 
