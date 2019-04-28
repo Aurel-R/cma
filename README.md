@@ -8,8 +8,7 @@ These functions allocate contiguous memory (cm) in order to share complex (and l
 ## Some specification and overview: 
 cma is designed for 64 bits x86 little endian processor with two's complement signed integers, running LP64 GNU/Linux system (8-byte aligned pointer) with flat address space and compiling with gcc C extension (-std=gnu11).
 
-Arrival sets must be strictly identical (memory alignement) on the different
-processes that want to share data. Example:
+Arrival sets must be strictly identical (memory alignment) on the different processes that want to share data. Example:
 ```
 /* srv app */
 struct data_srv {  /* a stucture example */
