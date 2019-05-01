@@ -68,7 +68,7 @@ if (cm_ptr_to(mem, &cm->s2, cm->s1))   /* GOOD */
     * (++)  Remove serialization/deserialization
     * (+)   Allow 'duplex transfert' (real-time sharing):
          * Locally (shared memory)
-         * Remotely in cluster? (RDMA, DSM, etc..)
+         * Remotely in cluster? (RDMA, DSM, SSI, etc..)
    * (-?)  If 'duplex transfert', user need to use lock/mutex on memory against concurrent accesses (like classic shm)
    * (--)  **Is not guaranteed to converge** ! (find the same addr on each participant)
 

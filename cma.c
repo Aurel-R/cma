@@ -208,22 +208,22 @@ static int recalculate_addr(struct cm_attr *mem,
 {
 	int oor;
 	uintptr_t ptr;
+	int64_t shift_value;
 	struct cm_addr_list *al;	
-	int64_t translation_coeff;
 	const uintptr_t _old_addr = (uintptr_t)old_addr;
 	const uintptr_t _new_addr = (uintptr_t)new_addr;
 
 	mem->base_addr = new_addr;
-	translation_coeff = subptr_64(_new_addr, _old_addr, &oor);
+	shift_value = subptr_64(_new_addr, _old_addr, &oor);
 	if (oor) {
 		errno = ERANGE;
 		return -1;
 	}
 
 	for (al = mem->addr_list; al; al = al->next) {
-		al->addr += translation_coeff;
+		al->addr += shift_value;
 		ptr = (uintptr_t)*al->addr;
-		ptr += ptr ? translation_coeff : 0;
+		ptr += ptr ? shift_value : 0;
 		*al->addr = (void *)ptr;
 	}
 
@@ -492,7 +492,7 @@ end:
 }
 
 static void cm_abs_deserialize(void *addr, const size_t *const nptr, 
-						const int64_t translation_coeff)
+						const int64_t shift_value)
 {
 	size_t i;
 	const size_t *const offset_table = nptr - *nptr;
@@ -501,45 +501,44 @@ static void cm_abs_deserialize(void *addr, const size_t *const nptr,
 	for (i = 0; i < *nptr; i++) {
 		*(uintptr_t *)(addr + offset_table[i]) += 
 			*(uintptr_t *)(addr + offset_table[i])
-					? translation_coeff : 0;
+						? shift_value : 0;
 	}
 }
 
 static void cm_rel_deserialize(void *addr, int8_t *vlq, 
-						const int64_t translation_coeff)
+						const int64_t shift_value)
 {
 	int32_t offset;
 
 	for (vlq -= read_vlq(&offset, vlq); offset; 
 	     vlq -= read_vlq(&offset, vlq)) {
 		addr += offset;
-		*(uintptr_t *)addr += *(uintptr_t *)addr ? translation_coeff : 0;
+		*(uintptr_t *)addr += *(uintptr_t *)addr ? shift_value : 0;
 	}
 }
 
 void *cm_deserialize(void *addr, const size_t len)
 {
 	int oor;
-	int64_t translation_coeff;
 	int8_t *vlq = CM_VLQ_OFFSET(addr, len);
 	const size_t *const nptr = CM_NPTR_OFFSET(addr, len);
-	const uintptr_t old_base_addr = *(uintptr_t *)CM_OBA_OFFSET(addr, len);
-	translation_coeff = subptr_64((uintptr_t)addr, old_base_addr, &oor);	
+	const uintptr_t old_addr = *(uintptr_t *)CM_OBA_OFFSET(addr, len);
+	const int64_t shift_value = subptr_64((uintptr_t)addr, old_addr, &oor);
 
 	if (oor) {
 		errno = ERANGE;
 		return NULL;
 	}
 
-	if (!translation_coeff) 
+	if (!shift_value) 
 		return (void *)*(uintptr_t *)addr;
 
 	if (*nptr)
-		cm_abs_deserialize(addr, nptr, translation_coeff);
+		cm_abs_deserialize(addr, nptr, shift_value);
 	else
-		cm_rel_deserialize(addr, vlq,  translation_coeff);	
+		cm_rel_deserialize(addr, vlq,  shift_value);	
 
-	*(uintptr_t *)addr += translation_coeff;	
+	*(uintptr_t *)addr += shift_value;	
 	return (void *)*(uintptr_t *)addr;
 }
 
