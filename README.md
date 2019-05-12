@@ -33,18 +33,7 @@ struct data_cli {    /* GOOD */
 };
 ```
 
-You can't affect directly a pointer in cm, you have to use `memcpy()`
-```
-char str[] = "abc";
-struct x *cm;  /* the CM */
-
-...
-
-cm->s = str;  /* WRONG */
-memcpy(cm->s, str, str_size);  /* GOOD */
-```
-
-In the same way, you can't affect directly a pointer in cm from cm. You have to use `cm_ptr_to()`
+You can't affect directly a pointer in cm from cm. You have to use `cm_ptr_to()`
 ```
 struct cm_attr *mem;
 
