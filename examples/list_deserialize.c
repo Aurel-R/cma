@@ -9,17 +9,15 @@
 #include <fcntl.h>
 #include <string.h>
 #include <time.h>
-#include <omp.h>
 #include "../cma.h"
-
-#define START	1
-#define STOP	0
 
 struct node {
 	unsigned x;
 	struct node *nxt;
 };
 
+#define START	1
+#define STOP	0
 static void bench(int flag)
 {
 	static struct timespec s;
@@ -61,7 +59,8 @@ int main(void)
 		goto err;
 	}	
 
-	cm = mmap(NULL, st.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+	cm = mmap(NULL, st.st_size, PROT_READ | PROT_WRITE, 
+					MAP_PRIVATE | MAP_POPULATE, fd, 0);
 	if (cm == MAP_FAILED) {
 		perror("mmap");
 		goto err;
