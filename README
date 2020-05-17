@@ -1,0 +1,121 @@
+Contiguous (and serialized) Memory Allocation
+=============================================
+
+These functions allocate contiguous memory (cm) in order to share or save 
+complex (and large) objects containing pointers (list, tree, graph, etc).
+
+
+Some specifications and overview
+================================
+
+cma is designed for 64 bits x86 little endian processor, running LP64 GNU/Linux 
+system (8-byte aligned pointer) with flat address space and compiling with gcc 
+C extension (-std=gnu11).
+
+Refer to the 'examples' directory (only posix shared memory use case for the 
+moment). man pages will arrive soon.
+
+
+Consider (for example) a binary tree composed as follows:
+
+	struct node {
+		int x;
+		struct node *right;
+		struct node *left;
+	};
+
+The first step consist to allocate enough memory to hold your data. Considering 
+that it is necessary to allocate 10 million nodes, you can calculate the 
+required size in this way:
+
+	// number of nodes multiplied by the size of one node
+	length  = 10000000 * sizeof(struct node);	// 240 MB
+
+	// add space for serialization information.	
+	length += length / 64;				// 243.75 MB
+
+	// add ~20% due to data alignment
+	length += length * 20 / 100;			// 292.5 MB
+
+Note that the memory is only "reserved" by the system, so don't hesitate to 
+think big (especially if the structure contains members that can vary 
+significantly in size). 
+
+To create your memory area, you have to call the cm_create() function:
+
+	struct cm_attr *mem = cm_create(fd, length, mode);
+	
+cm_create() return the contiguous memory attribute (*mem) used by other 
+functions. 'fd' refers to the file descriptor of a backed file obtained by 
+open(), a shared memory object obtained by shm_open() or an anonymous mapping 
+if fd == -1. 'length' is the size previously calculated and 'mode' corresponds 
+to the 'flags' of the mmap() function. 
+
+You can now use the cm_alloc() function in the same way as you would use the 
+malloc() function to allocate your nodes. Note that at this moment, only one 
+type of allocator is available (cm_default_alloc): 
+	
+	#define cm_alloc cm_default_alloc
+	#define cm_free  cm_default_free
+
+	[...]
+
+	struct node *n1 = cm_alloc(mem, sizeof(struct node));
+	if (n1 == NULL)
+		[error handling...]
+
+	cm_add_ptr(mem, &n1->right);
+	cm_add_ptr(mem, &n1->left);
+
+The cm_add_ptr() function is used to specify whether the memory previously 
+allocated by cm_alloc() corresponds to an object containing one or more
+pointers. The use of this function is necessary for the serialization procedure. 
+
+At the end, you have to serialize your memory with the the cm_serialize() 
+function. 
+	
+	struct node *root = n23;   // n23 is assumed to be the root of the tree
+	cm_serialize(mem, root, 0);
+
+'root' can also be seens as the 'head' in the case of a list for example (or a 
+pointer to pointer to the head/root/etc). 
+
+Memory is now saved in a file or a shared memory (if 'fd' was specified in
+cm_create()). Memory can also be sent through a socket using 'mem->base_addr'
+and 'mem->size' as send function parameters.
+
+The data can be deserialized at the other end with the cm_deserialize() 
+function:
+
+	struct node *root = cm_deserialize(ptr, size);
+
+where 'ptr' is a void pointer to the received contiguous memory.
+
+The two functions cm_serialize() and cm_deserialize() can benefit from the 
+parallelism if the OMP_NUM_THREADS environment variable is set. 
+e.g. for 4 threads: 
+
+	$ export OMP_NUM_THREADS=4	
+
+
+Note that you do not have to use only one structure of one type. You can define 
+more complex structures such as these:
+
+	struct simple {
+		int x;
+		char *s;
+	};	
+
+	struct node {
+		int id;
+		struct simple *simple;
+		struct node *right;
+		struct node *left;
+	};
+
+	struct list {
+		struct node *root;
+		struct list *next;
+	};
+
+
